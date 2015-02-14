@@ -134,7 +134,7 @@ public class SolrBrowseDAO implements BrowseDAO
     private DiscoverResult sResponse = null;
 
     private boolean itemsWithdrawn = false;
-    private boolean itemsPrivate = false;
+    private boolean itemsDiscoverable = true;
 
     private boolean showFrequencies;
     
@@ -187,7 +187,8 @@ public class SolrBrowseDAO implements BrowseDAO
             }
             try
             {
-                sResponse = searcher.search(context, query, itemsWithdrawn);
+				sResponse = searcher.search(context, query, itemsWithdrawn
+						|| !itemsDiscoverable);
             }
             catch (SearchServiceException e)
             {
@@ -202,18 +203,10 @@ public class SolrBrowseDAO implements BrowseDAO
         if (itemsWithdrawn)
         {
             query.addFilterQueries("withdrawn:true");
-            if (itemsPrivate)
-            {
-                query.addFilterQueries("discoverable:false");    
-            }
-            else
-            {
-                query.addFilterQueries("NOT(discoverable:false)");    
-            }
         }
-        else
+        else if (!itemsDiscoverable)
         {
-            query.addFilterQueries("NOT(withdrawn:true)");
+            query.addFilterQueries("discoverable:false");    
         }
     }
 
@@ -302,7 +295,7 @@ public class SolrBrowseDAO implements BrowseDAO
             // processing the query...
             Item item = (Item) solrDoc;
             BrowseItem bitem = new BrowseItem(context, item.getID(),
-                    item.isArchived(), item.isWithdrawn());
+                    item.isArchived(), item.isWithdrawn(), item.isDiscoverable());
             bitems.add(bitem);
         }
         return bitems;
@@ -682,13 +675,10 @@ public class SolrBrowseDAO implements BrowseDAO
         if (table.equals(BrowseIndex.getWithdrawnBrowseIndex().getTableName()))
         {
             itemsWithdrawn = true;
-            itemsPrivate = false;
         }
         else if (table.equals(BrowseIndex.getPrivateBrowseIndex().getTableName()))
         {
-            itemsPrivate = true;
-            // items private are also withdrawn
-            itemsWithdrawn = true;
+            itemsDiscoverable = false;
         }
         facetField = table;
     }

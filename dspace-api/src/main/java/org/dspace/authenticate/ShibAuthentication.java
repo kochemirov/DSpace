@@ -26,9 +26,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
 
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.dspace.authorize.AuthorizeException;
 
@@ -186,9 +188,11 @@ public class ShibAuthentication implements AuthenticationMethod
 			log.debug("Starting Shibboleth Authentication");
 
 			String message = "Received the following headers:\n";
+			@SuppressWarnings("unchecked")
 			Enumeration<String> headerNames = request.getHeaderNames();
 			while (headerNames.hasMoreElements()) {
 				String headerName = headerNames.nextElement();
+				@SuppressWarnings("unchecked")
 				Enumeration<String> headerValues = request.getHeaders(headerName);
 				while (headerValues.hasMoreElements()) {
 					String headerValue = headerValues.nextElement();
@@ -301,7 +305,7 @@ public class ShibAuthentication implements AuthenticationMethod
 			}
 
 			// Get the Shib supplied affiliation or use the default affiliation
-			List<String> affiliations = findMultipleHeaders(request, roleHeader);
+			List<String> affiliations = findMultipleAttributes(request, roleHeader);
 			if (affiliations == null) {
 				if (defaultRoles != null)
 					affiliations = Arrays.asList(defaultRoles.split(","));
@@ -336,7 +340,7 @@ public class ShibAuthentication implements AuthenticationMethod
 					}
 
 					if (groupNames == null) {
-						log.debug("Unable to find role mapping for the value, '"+affiliation+"', there should be a mapping in the dspace.cfg:  authentication.shib.role."+affiliation+" = <some group name>");
+						log.debug("Unable to find role mapping for the value, '"+affiliation+"', there should be a mapping in config/modules/authentication-shibboleth.cfg:  role."+affiliation+" = <some group name>");
 						continue;
 					} else {
 						log.debug("Mapping role affiliation to DSpace group: '"+groupNames+"'");
@@ -482,7 +486,7 @@ public class ShibAuthentication implements AuthenticationMethod
 			// Shibboleth authentication initiator 
 			if (shibURL == null || shibURL.length() == 0)
 				shibURL = "/Shibboleth.sso/Login";
-			shibURL.trim();
+			shibURL = shibURL.trim();
 
 			// Determine the return URL, where shib will send the user after authenticating. We need it to go back
 			// to DSpace's shibboleth-login url so the we will extract the user's information and locally
@@ -577,7 +581,7 @@ public class ShibAuthentication implements AuthenticationMethod
 
 		// 1) First, look for a netid header.
 		if (netidHeader != null) {
-			String netid = findSingleHeader(request,netidHeader);
+			String netid = findSingleAttribute(request,netidHeader);
 
 			if (netid != null) {
 				foundNetID = true;
@@ -592,7 +596,7 @@ public class ShibAuthentication implements AuthenticationMethod
 
 		// 2) Second, look for an email header.
 		if (eperson == null && emailHeader != null) {
-			String email = findSingleHeader(request,emailHeader);
+			String email = findSingleAttribute(request,emailHeader);
 
 			if (email != null) {
 				foundEmail = true;
@@ -618,7 +622,7 @@ public class ShibAuthentication implements AuthenticationMethod
 
 			if (email != null) {
 				foundRemoteUser = true;
-				email.toLowerCase();
+				email = email.toLowerCase();
 				eperson = EPerson.findByEmail(context, email);
 
 				if (eperson == null)
@@ -670,12 +674,12 @@ public class ShibAuthentication implements AuthenticationMethod
 		String lnameHeader = ConfigurationManager.getProperty("authentication-shibboleth","lastname-header");
 
 		// Header values
-		String netid = findSingleHeader(request,netidHeader);
-		String email = findSingleHeader(request,emailHeader);
-		String fname = findSingleHeader(request,fnameHeader);
-		String lname = findSingleHeader(request,lnameHeader);
+		String netid = findSingleAttribute(request,netidHeader);
+		String email = findSingleAttribute(request,emailHeader);
+		String fname = findSingleAttribute(request,fnameHeader);
+		String lname = findSingleAttribute(request,lnameHeader);
 
-		if ( email == null || fname == null || lname == null) {
+		if ( email == null || (fnameHeader != null && fname == null) || (lnameHeader != null && lname == null)) {
 			// We require that there be an email, first name, and last name. If we
 			// don't have at least these three pieces of information then we fail.
 			String message = "Unable to register new eperson because we are unable to find an email address along with first and last name for the user.\n";
@@ -689,11 +693,11 @@ public class ShibAuthentication implements AuthenticationMethod
 		}
 
 		// Truncate values of parameters that are too big.
-		if (fname.length() > NAME_MAX_SIZE) {
+		if (fname != null && fname.length() > NAME_MAX_SIZE) {
 			log.warn("Truncating eperson's first name because it is longer than "+NAME_MAX_SIZE+": '"+fname+"'");
 			fname = fname.substring(0,NAME_MAX_SIZE);
 		}
-		if (lname.length() > NAME_MAX_SIZE) {
+		if (lname != null && lname.length() > NAME_MAX_SIZE) {
 			log.warn("Truncating eperson's last name because it is longer than "+NAME_MAX_SIZE+": '"+lname+"'");
 			lname = lname.substring(0,NAME_MAX_SIZE);
 		}
@@ -706,8 +710,10 @@ public class ShibAuthentication implements AuthenticationMethod
 		if (netid != null)
 			eperson.setNetid(netid);
 		eperson.setEmail(email.toLowerCase());
-		eperson.setFirstName(fname);
-		eperson.setLastName(lname);
+		if ( fname != null )
+			eperson.setFirstName(fname);
+		if ( lname != null )
+			eperson.setLastName(lname);
 		eperson.setCanLogIn(true);
 
 		// Commit the new eperson
@@ -756,17 +762,17 @@ public class ShibAuthentication implements AuthenticationMethod
 		String fnameHeader = ConfigurationManager.getProperty("authentication-shibboleth","firstname-header");
 		String lnameHeader = ConfigurationManager.getProperty("authentication-shibboleth","lastname-header");
 
-		String netid = findSingleHeader(request,netidHeader);
-		String email = findSingleHeader(request,emailHeader);
-		String fname = findSingleHeader(request,fnameHeader);
-		String lname = findSingleHeader(request,lnameHeader);
+		String netid = findSingleAttribute(request,netidHeader);
+		String email = findSingleAttribute(request,emailHeader);
+		String fname = findSingleAttribute(request,fnameHeader);
+		String lname = findSingleAttribute(request,lnameHeader);
 
 		// Truncate values of parameters that are too big.
-		if (fname.length() > NAME_MAX_SIZE) {
+		if (fname != null && fname.length() > NAME_MAX_SIZE) {
 			log.warn("Truncating eperson's first name because it is longer than "+NAME_MAX_SIZE+": '"+fname+"'");
 			fname = fname.substring(0,NAME_MAX_SIZE);
 		}
-		if (lname.length() > NAME_MAX_SIZE) {
+		if (lname != null && lname.length() > NAME_MAX_SIZE) {
 			log.warn("Truncating eperson's last name because it is longer than "+NAME_MAX_SIZE+": '"+lname+"'");
 			lname = lname.substring(0,NAME_MAX_SIZE);
 		}
@@ -799,7 +805,7 @@ public class ShibAuthentication implements AuthenticationMethod
 		for (String header : metadataHeaderMap.keySet()) {
 
 			String field = metadataHeaderMap.get(header);
-			String value = findSingleHeader(request, header);
+			String value = findSingleAttribute(request, header);
 
 			// Truncate values
 			if (value == null) {
@@ -1067,16 +1073,44 @@ public class ShibAuthentication implements AuthenticationMethod
 	 * This method will not interpret the header value in any way.
 	 * 
 	 * 
-	 * @param request The HTTP request to look for headers values on.
-	 * @param name The name of the header
-	 * @return The value of the header requested, or null if none found.
+	 * @param request The HTTP request to look for values in.
+	 * @param name The name of the attribute or header
+	 * @return The value of the attribute or header requested, or null if none found.
 	 */
-	private String findHeader(HttpServletRequest request, String name) {
-		String value = request.getHeader(name);
-		if (value == null)
+	private String findAttribute(HttpServletRequest request, String name) {
+		if ( name == null ) {
+			return null;
+		}
+		// First try to get the value from the attribute
+		String value = (String) request.getAttribute(name);
+		if (StringUtils.isEmpty(value))
+			value = (String) request.getAttribute(name.toLowerCase());
+		if (StringUtils.isEmpty(value))
+			value = (String) request.getAttribute(name.toUpperCase());
+
+		// Second try to get the value from the header
+		if (StringUtils.isEmpty(value))
+		    value = request.getHeader(name);
+		if (StringUtils.isEmpty(value))
 			value = request.getHeader(name.toLowerCase());
-		if (value == null)
+		if (StringUtils.isEmpty(value))
 			value = request.getHeader(name.toUpperCase());
+                
+                boolean reconvertAttributes = 
+                        ConfigurationManager.getBooleanProperty(
+                            "authentication-shibboleth",
+                            "reconvert.attributes",
+                            false);
+                
+                if (!StringUtils.isEmpty(value) && reconvertAttributes)
+                {
+                    try {
+                        value = new String(value.getBytes("ISO-8859-1"), "UTF-8");
+                    } catch (UnsupportedEncodingException ex) {
+                        log.warn("Failed to reconvert shibboleth attribute ("
+                                + name + ").", ex);
+                    }
+                }
 		
 		return value;
 	}
@@ -1089,7 +1123,7 @@ public class ShibAuthentication implements AuthenticationMethod
 	 * 
 	 * Shibboleth attributes may contain multiple values separated by a
 	 * semicolon. This method will return the first value in the attribute. If
-	 * you need multiple values use findMultipleHeaders instead.
+	 * you need multiple values use findMultipleAttributes instead.
 	 * 
 	 * If no attribute is found then null is returned.
 	 * 
@@ -1097,9 +1131,12 @@ public class ShibAuthentication implements AuthenticationMethod
 	 * @param name The name of the header
 	 * @return The value of the header requested, or null if none found.
 	 */
-	private String findSingleHeader(HttpServletRequest request, String name) {
+	private String findSingleAttribute(HttpServletRequest request, String name) {
+		if ( name == null) {
+			return null;
+		}
 
-		String value = findHeader(request, name);
+		String value = findAttribute(request, name);
 
 
 		if (value != null) {
@@ -1125,8 +1162,8 @@ public class ShibAuthentication implements AuthenticationMethod
 	}
 
 	/**
-	 * Find a particular Shibboleth header value and return the all values.
-	 * The header name uses a bit of fuzzy logic, so it will first try case
+	 * Find a particular Shibboleth hattributeeader value and return the values.
+	 * The attribute name uses a bit of fuzzy logic, so it will first try case
 	 * sensitive, then it will try lowercase, and finally it will try uppercase.
 	 * 
 	 * Shibboleth attributes may contain multiple values separated by a
@@ -1136,11 +1173,11 @@ public class ShibAuthentication implements AuthenticationMethod
 	 * If no attributes are found then null is returned.
 	 * 
 	 * @param request The HTTP request to look for headers values on.
-	 * @param name The name of the header
+	 * @param name The name of the attribute
 	 * @return The list of values found, or null if none found.
 	 */
-	private List<String> findMultipleHeaders(HttpServletRequest request, String name) {
-		String values = findHeader(request, name);
+	private List<String> findMultipleAttributes(HttpServletRequest request, String name) {
+		String values = findAttribute(request, name);
 
 		if (values == null)
 			return null;
@@ -1158,7 +1195,7 @@ public class ShibAuthentication implements AuthenticationMethod
 				// prevent an endless loop in an error condition.
 				values = values.substring(1,values.length());
 
-			} else if (idx > 0 && values.charAt(idx-1) != '\\' ) {
+			} else if (idx > 0 && values.charAt(idx-1) == '\\' ) {
 				// The attribute starts with an escaped semicolon
 				idx++;
 			} else if ( idx > 0) {
