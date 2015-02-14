@@ -11,7 +11,7 @@
    <parent>
       <groupId>org.dspace</groupId>
       <artifactId>dspace-parent</artifactId>
-      <version>4.3-SNAPSHOT</version>
+      <version>5.1-SNAPSHOT</version>
       <relativePath>..</relativePath>
    </parent>
 
@@ -51,8 +51,8 @@
                 </executions>
             </plugin>
             <plugin>
-                <groupId>com.mycila.maven-license-plugin</groupId>
-                <artifactId>maven-license-plugin</artifactId>
+                <groupId>com.mycila</groupId>
+                <artifactId>license-maven-plugin</artifactId>
                 <configuration>
                     <!--Exclude license check for XMLUI files which don't need it-->
                     <excludes>
@@ -63,6 +63,7 @@
                         <exclude>**/cocoon/**</exclude>
                         <exclude>**/scriptaculous/**</exclude>
                         <exclude>**/jquery*</exclude>
+                        <exclude>**/Datatables/**</exclude>
                         <exclude>**/modernizr*</exclude>
                         <exclude>**/DD_belated*</exclude>
                         <exclude>**/detectmobile*</exclude>
@@ -100,6 +101,7 @@
         <dependency>
             <groupId>org.dspace</groupId>
             <artifactId>dspace-services</artifactId>
+            <version>5.1-SNAPSHOT</version>
         </dependency>
 
         <!-- Custom build DSpace cocoon -->
@@ -231,6 +233,11 @@
             <groupId>javax.servlet</groupId>
             <artifactId>servlet-api</artifactId>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.oauth-client</groupId>
+            <artifactId>google-oauth-client</artifactId>
+            <version>1.19.0</version>
         </dependency>
 
     </dependencies>

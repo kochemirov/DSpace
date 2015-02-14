@@ -2352,4 +2352,7 @@ Translated by Ekaterina Chubich
 
 	<message key="xmlui.mirage2.forms.nonCompositeFieldSet.add">Добавить</message>
 	<message key="xmlui.mirage2.forms.instancedCompositeFields.add">Добавить</message>
+	<message key="xmlui.mirage2.discovery.showAdvancedFilters">Открыть расширенные фильтры</message>
+	<message key="xmlui.mirage2.discovery.hideAdvancedFilters">Спрятать расширенные фильтры</message>
+
 </catalogue>
